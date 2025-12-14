@@ -1,0 +1,1075 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OpenRouter AI Chat</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <style>
+    :root { color-scheme: dark; }
+    /* Smooth scroll for chat */
+    #chatScroll { scroll-behavior: smooth; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+  </style>
+</head>
+<body class="min-h-screen bg-zinc-950 text-zinc-100">
+  <div class="max-w-7xl mx-auto px-4 py-4">
+    <header class="flex items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="size-9 rounded-xl bg-gradient-to-br from-indigo-500 to-fuchsia-600 shadow"></div>
+        <div>
+          <h1 class="text-lg font-semibold leading-tight">OpenRouter AI Chat</h1>
+          <p class="text-xs text-zinc-400">Chatbot AI via <span class="mono">https://openrouter.ai</span> · Tambah & pilih model</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button id="btnSetup" class="rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 px-3 py-2 text-sm">Pengaturan</button>
+        <button id="btnClear" class="rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 px-3 py-2 text-sm">Bersihkan Chat</button>
+      </div>
+    </header>
+
+    <main class="mt-4 grid grid-cols-1 lg:grid-cols-12 gap-4">
+      <!-- Sidebar -->
+      <aside class="lg:col-span-4 xl:col-span-3">
+        <div class="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+          <div class="flex items-center justify-between gap-2">
+            <h2 class="font-semibold">Model</h2>
+            <div class="flex items-center gap-2">
+              <button id="btnBrowseModels" class="text-xs px-2 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800">Browse</button>
+              <button id="btnAddModel" class="text-xs px-2 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500">Tambah</button>
+            </div>
+          </div>
+
+          <div class="mt-3">
+            <label class="text-xs text-zinc-400">Model aktif</label>
+            <select id="modelSelect" class="mt-1 w-full rounded-xl bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm"></select>
+            <p id="modelHint" class="mt-2 text-xs text-zinc-500">Pilih model untuk digunakan saat mengirim pesan.</p>
+          </div>
+
+          <div class="mt-4 border-t border-zinc-800 pt-4">
+            <h3 class="text-sm font-semibold">Daftar model</h3>
+            <div id="modelList" class="mt-3 space-y-2"></div>
+          </div>
+        </div>
+
+        <div class="mt-4 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+          <h2 class="font-semibold">Parameter</h2>
+          <div class="mt-3 grid grid-cols-2 gap-3">
+            <div>
+              <label class="text-xs text-zinc-400">Temperature</label>
+              <input id="temp" type="number" step="0.1" min="0" max="2" class="mt-1 w-full rounded-xl bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm" value="0.7" />
+            </div>
+            <div>
+              <label class="text-xs text-zinc-400">Max tokens</label>
+              <input id="maxTokens" type="number" step="1" min="64" max="8192" class="mt-1 w-full rounded-xl bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm" value="1024" />
+            </div>
+          </div>
+
+          <div class="mt-3">
+            <label class="text-xs text-zinc-400">System prompt (opsional)</label>
+            <textarea id="systemPrompt" rows="4" class="mt-1 w-full rounded-xl bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm" placeholder="Contoh: Kamu adalah asisten yang ringkas dan membantu."></textarea>
+          </div>
+
+          <div class="mt-3 flex items-center justify-between">
+            <div class="text-xs text-zinc-500">
+              Endpoint: <span class="mono">/api/v1/chat/completions</span>
+            </div>
+            <button id="btnTest" class="text-xs px-2 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800">Tes koneksi</button>
+          </div>
+          <p class="mt-2 text-xs text-zinc-500">Catatan: API key disimpan di <span class="mono">localStorage</span> browser Anda.</p>
+        </div>
+      </aside>
+
+      <!-- Chat -->
+      <section class="lg:col-span-8 xl:col-span-9">
+        <div class="rounded-2xl border border-zinc-800 bg-zinc-900/40 overflow-hidden">
+          <div class="flex items-center justify-between gap-2 px-4 py-3 border-b border-zinc-800">
+            <div class="min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-semibold">Chat</span>
+                <span id="statusDot" class="inline-flex items-center gap-2 text-xs text-zinc-400">
+                  <span class="inline-block size-2 rounded-full bg-zinc-500" aria-hidden="true"></span>
+                  <span id="statusText">Siap</span>
+                </span>
+              </div>
+              <div class="text-xs text-zinc-500 truncate">Model: <span id="activeModelLabel" class="mono"></span></div>
+            </div>
+            <div class="flex items-center gap-2">
+              <button id="btnStop" class="hidden rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 px-3 py-2 text-sm">Stop</button>
+              <button id="btnExport" class="rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 px-3 py-2 text-sm">Export</button>
+            </div>
+          </div>
+
+          <div id="chatScroll" class="h-[60vh] lg:h-[68vh] overflow-y-auto px-4 py-4 space-y-3">
+            <!-- messages -->
+          </div>
+
+          <div class="border-t border-zinc-800 p-3">
+            <div class="flex gap-2">
+              <textarea id="userInput" rows="2" class="flex-1 rounded-2xl bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm" placeholder="Ketik pesan... (Enter untuk kirim, Shift+Enter baris baru)"></textarea>
+              <button id="btnSend" class="rounded-2xl bg-indigo-600 hover:bg-indigo-500 px-4 py-2 text-sm font-semibold">Kirim</button>
+            </div>
+            <div class="mt-2 flex items-center justify-between text-xs text-zinc-500">
+              <div>
+                <span class="mono">Authorization: Bearer</span> + API key (OpenRouter)
+              </div>
+              <div id="smallError" class="text-xs text-rose-400"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Setup / Settings Modal -->
+  <div id="setupModal" class="fixed inset-0 hidden">
+    <div class="absolute inset-0 bg-black/60"></div>
+    <div class="relative mx-auto mt-10 w-[95vw] max-w-2xl rounded-2xl border border-zinc-800 bg-zinc-950 shadow-2xl">
+      <div class="px-5 py-4 border-b border-zinc-800 flex items-start justify-between gap-4">
+        <div>
+          <h2 class="text-base font-semibold">Pengaturan OpenRouter</h2>
+          <p class="text-xs text-zinc-400 mt-1">Wajib masukkan API key dan tambahkan minimal 1 model untuk mulai chat.</p>
+        </div>
+        <button id="btnCloseSetup" class="rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 px-3 py-2 text-sm">Tutup</button>
+      </div>
+
+      <div class="p-5 space-y-5">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="md:col-span-2">
+            <label class="text-xs text-zinc-400">OpenRouter API Key</label>
+            <input id="apiKeyInput" type="password" class="mt-1 w-full rounded-xl bg-zinc-900/40 border border-zinc-800 px-3 py-2 text-sm mono" placeholder="sk-or-v1-..." />
+            <div class="mt-2 flex items-center justify-between gap-3">
+              <button id="btnRevealKey" class="text-xs px-2 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800">Tampilkan</button>
+              <a class="text-xs text-indigo-400 hover:text-indigo-300" target="_blank" rel="noreferrer" href="https://openrouter.ai/keys">Buat / kelola key</a>
+            </div>
+            <p class="mt-2 text-xs text-zinc-500">Endpoint menggunakan HTTPS: <span class="mono">https://openrouter.ai/api/v1</span></p>
+          </div>
+
+          <div>
+            <label class="text-xs text-zinc-400">Tambahkan model (ID)</label>
+            <input id="firstModelId" class="mt-1 w-full rounded-xl bg-zinc-900/40 border border-zinc-800 px-3 py-2 text-sm mono" placeholder="contoh: openai/gpt-4o-mini" />
+            <p class="mt-2 text-xs text-zinc-500">Gunakan format: <span class="mono">provider/model</span></p>
+          </div>
+          <div>
+            <label class="text-xs text-zinc-400">Nama tampilan (opsional)</label>
+            <input id="firstModelName" class="mt-1 w-full rounded-xl bg-zinc-900/40 border border-zinc-800 px-3 py-2 text-sm" placeholder="Mis. GPT-4o mini" />
+          </div>
+        </div>
+
+        <div class="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <h3 class="text-sm font-semibold">Tips cepat</h3>
+              <ul class="mt-2 text-xs text-zinc-400 list-disc pl-5 space-y-1">
+                <li>Model populer: <span class="mono">openai/gpt-4o-mini</span>, <span class="mono">anthropic/claude-3.5-sonnet</span>, <span class="mono">google/gemini-2.0-flash</span></li>
+                <li>Header tambahan yang disarankan OpenRouter akan otomatis dikirim: <span class="mono">HTTP-Referer</span> & <span class="mono">X-Title</span>.</li>
+                <li>Jika error 401/403: pastikan key benar dan model tersedia untuk key Anda.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between gap-3">
+          <div id="setupError" class="text-sm text-rose-400"></div>
+          <div class="flex items-center gap-2">
+            <button id="btnReset" class="rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 px-3 py-2 text-sm">Reset data</button>
+            <button id="btnSaveSetup" class="rounded-xl bg-indigo-600 hover:bg-indigo-500 px-4 py-2 text-sm font-semibold">Simpan & Lanjut</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add Model Modal -->
+  <div id="addModelModal" class="fixed inset-0 hidden">
+    <div class="absolute inset-0 bg-black/60"></div>
+    <div class="relative mx-auto mt-16 w-[95vw] max-w-xl rounded-2xl border border-zinc-800 bg-zinc-950 shadow-2xl">
+      <div class="px-5 py-4 border-b border-zinc-800 flex items-start justify-between gap-4">
+        <div>
+          <h2 class="text-base font-semibold">Tambah model</h2>
+          <p class="text-xs text-zinc-400 mt-1">Tambahkan model baru ke daftar (tidak mengirim data ke server selain saat chat).</p>
+        </div>
+        <button id="btnCloseAddModel" class="rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 px-3 py-2 text-sm">Tutup</button>
+      </div>
+      <div class="p-5 space-y-4">
+        <div>
+          <label class="text-xs text-zinc-400">Model ID</label>
+          <input id="newModelId" class="mt-1 w-full rounded-xl bg-zinc-900/40 border border-zinc-800 px-3 py-2 text-sm mono" placeholder="contoh: openai/gpt-4o-mini" />
+        </div>
+        <div>
+          <label class="text-xs text-zinc-400">Nama tampilan (opsional)</label>
+          <input id="newModelName" class="mt-1 w-full rounded-xl bg-zinc-900/40 border border-zinc-800 px-3 py-2 text-sm" placeholder="Mis. GPT-4o mini" />
+        </div>
+        <div class="flex items-center justify-between gap-3">
+          <div id="addModelError" class="text-sm text-rose-400"></div>
+          <button id="btnSaveModel" class="rounded-xl bg-indigo-600 hover:bg-indigo-500 px-4 py-2 text-sm font-semibold">Tambah</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Browse Models Modal -->
+  <div id="browseModal" class="fixed inset-0 hidden">
+    <div class="absolute inset-0 bg-black/60"></div>
+    <div class="relative mx-auto mt-10 w-[95vw] max-w-3xl rounded-2xl border border-zinc-800 bg-zinc-950 shadow-2xl">
+      <div class="px-5 py-4 border-b border-zinc-800 flex items-start justify-between gap-4">
+        <div>
+          <h2 class="text-base font-semibold">Browse model (OpenRouter)</h2>
+          <p class="text-xs text-zinc-400 mt-1">Mengambil daftar model via <span class="mono">https://openrouter.ai/api/v1/models</span>.</p>
+        </div>
+        <button id="btnCloseBrowse" class="rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 px-3 py-2 text-sm">Tutup</button>
+      </div>
+
+      <div class="p-5 space-y-4">
+        <div class="flex flex-col md:flex-row gap-2 md:items-center">
+          <input id="browseSearch" class="flex-1 rounded-xl bg-zinc-900/40 border border-zinc-800 px-3 py-2 text-sm" placeholder="Cari model: gpt, claude, gemini, mistral..." />
+          <button id="btnReloadModels" class="rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 px-3 py-2 text-sm">Muat ulang</button>
+        </div>
+
+        <div id="browseInfo" class="text-xs text-zinc-500"></div>
+        <div id="browseError" class="text-sm text-rose-400"></div>
+
+        <div class="max-h-[55vh] overflow-auto rounded-2xl border border-zinc-800">
+          <table class="w-full text-sm">
+            <thead class="sticky top-0 bg-zinc-950 border-b border-zinc-800">
+              <tr>
+                <th class="text-left font-semibold px-3 py-2">ID</th>
+                <th class="text-left font-semibold px-3 py-2">Nama</th>
+                <th class="text-left font-semibold px-3 py-2">Context</th>
+                <th class="px-3 py-2"></th>
+              </tr>
+            </thead>
+            <tbody id="browseTable" class="divide-y divide-zinc-800"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" class="fixed bottom-4 left-1/2 -translate-x-1/2 hidden">
+    <div class="rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-3 shadow-xl">
+      <div id="toastText" class="text-sm"></div>
+    </div>
+  </div>
+
+  <script>
+    // ------------------------------
+    // Storage keys
+    // ------------------------------
+    const LS = {
+      apiKey: 'or_api_key',
+      models: 'or_models',
+      activeModel: 'or_active_model',
+      systemPrompt: 'or_system_prompt',
+      params: 'or_params',
+      chat: 'or_chat'
+    };
+
+    // ------------------------------
+    // DOM refs
+    // ------------------------------
+    const el = (id) => document.getElementById(id);
+
+    const setupModal = el('setupModal');
+    const addModelModal = el('addModelModal');
+    const browseModal = el('browseModal');
+
+    const modelSelect = el('modelSelect');
+    const modelList = el('modelList');
+    const chatScroll = el('chatScroll');
+    const userInput = el('userInput');
+
+    const activeModelLabel = el('activeModelLabel');
+    const statusText = el('statusText');
+    const statusDot = el('statusDot').querySelector('span');
+
+    const smallError = el('smallError');
+
+    // ------------------------------
+    // App state
+    // ------------------------------
+    let messages = []; // {role, content}
+    let controller = null;
+    let browsingModels = [];
+
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+    function toast(text) {
+      const t = el('toast');
+      el('toastText').textContent = text;
+      t.classList.remove('hidden');
+      clearTimeout(toast._t);
+      toast._t = setTimeout(() => t.classList.add('hidden'), 2600);
+    }
+
+    function setStatus(kind, text) {
+      statusText.textContent = text;
+      const map = {
+        idle: 'bg-zinc-500',
+        ok: 'bg-emerald-500',
+        working: 'bg-indigo-500',
+        error: 'bg-rose-500'
+      };
+      statusDot.className = 'inline-block size-2 rounded-full ' + (map[kind] || map.idle);
+    }
+
+    function loadJson(key, fallback) {
+      try {
+        const raw = localStorage.getItem(key);
+        if (!raw) return fallback;
+        return JSON.parse(raw);
+      } catch {
+        return fallback;
+      }
+    }
+
+    function saveJson(key, value) {
+      localStorage.setItem(key, JSON.stringify(value));
+    }
+
+    function getApiKey() {
+      return (localStorage.getItem(LS.apiKey) || '').trim();
+    }
+
+    function setApiKey(k) {
+      localStorage.setItem(LS.apiKey, k.trim());
+    }
+
+    function getModels() {
+      return loadJson(LS.models, []);
+    }
+
+    function setModels(models) {
+      saveJson(LS.models, models);
+    }
+
+    function getActiveModel() {
+      return (localStorage.getItem(LS.activeModel) || '').trim();
+    }
+
+    function setActiveModel(id) {
+      localStorage.setItem(LS.activeModel, id);
+    }
+
+    function ensureActiveModel() {
+      const models = getModels();
+      let active = getActiveModel();
+      if (!active && models.length) {
+        active = models[0].id;
+        setActiveModel(active);
+      }
+      if (active && !models.some(m => m.id === active) && models.length) {
+        active = models[0].id;
+        setActiveModel(active);
+      }
+      return active;
+    }
+
+    function getParams() {
+      return loadJson(LS.params, { temperature: 0.7, max_tokens: 1024 });
+    }
+
+    function setParams(p) {
+      saveJson(LS.params, p);
+    }
+
+    function getSystemPrompt() {
+      return localStorage.getItem(LS.systemPrompt) || '';
+    }
+
+    function setSystemPrompt(v) {
+      localStorage.setItem(LS.systemPrompt, v || '');
+    }
+
+    function saveChat() {
+      saveJson(LS.chat, messages);
+    }
+
+    function loadChat() {
+      messages = loadJson(LS.chat, []);
+    }
+
+    // ------------------------------
+    // UI: models
+    // ------------------------------
+    function renderModelsUI() {
+      const models = getModels();
+      const active = ensureActiveModel();
+
+      // select
+      modelSelect.innerHTML = '';
+      if (!models.length) {
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.textContent = 'Belum ada model';
+        modelSelect.appendChild(opt);
+        modelSelect.disabled = true;
+      } else {
+        modelSelect.disabled = false;
+        for (const m of models) {
+          const opt = document.createElement('option');
+          opt.value = m.id;
+          opt.textContent = m.name ? `${m.name} — ${m.id}` : m.id;
+          if (m.id === active) opt.selected = true;
+          modelSelect.appendChild(opt);
+        }
+      }
+
+      activeModelLabel.textContent = active || '-';
+
+      // list
+      modelList.innerHTML = '';
+      if (!models.length) {
+        const d = document.createElement('div');
+        d.className = 'text-sm text-zinc-400';
+        d.textContent = 'Belum ada model. Klik “Tambah” untuk menambahkan.';
+        modelList.appendChild(d);
+      } else {
+        for (const m of models) {
+          const row = document.createElement('div');
+          row.className = 'flex items-center justify-between gap-2 rounded-xl border border-zinc-800 bg-zinc-950/40 px-3 py-2';
+
+          const left = document.createElement('div');
+          left.className = 'min-w-0';
+          const title = document.createElement('div');
+          title.className = 'text-sm font-semibold truncate';
+          title.textContent = m.name || m.id;
+          const sub = document.createElement('div');
+          sub.className = 'text-xs text-zinc-500 truncate mono';
+          sub.textContent = m.id;
+          left.appendChild(title);
+          left.appendChild(sub);
+
+          const right = document.createElement('div');
+          right.className = 'flex items-center gap-2 shrink-0';
+
+          const badge = document.createElement('span');
+          badge.className = 'text-[11px] px-2 py-0.5 rounded-full border border-zinc-800 bg-zinc-900 text-zinc-300';
+          badge.textContent = (m.id === active) ? 'Aktif' : 'Tersimpan';
+
+          const btn = document.createElement('button');
+          btn.className = 'text-xs px-2 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800';
+          btn.textContent = 'Hapus';
+          btn.onclick = () => {
+            const next = getModels().filter(x => x.id !== m.id);
+            setModels(next);
+            if (getActiveModel() === m.id) {
+              localStorage.removeItem(LS.activeModel);
+              ensureActiveModel();
+            }
+            renderModelsUI();
+            toast('Model dihapus');
+            // If no model left, force setup
+            if (!getModels().length) showSetup(true);
+          };
+
+          right.appendChild(badge);
+          right.appendChild(btn);
+
+          row.appendChild(left);
+          row.appendChild(right);
+          modelList.appendChild(row);
+        }
+      }
+    }
+
+    function addModel({ id, name }) {
+      id = (id || '').trim();
+      name = (name || '').trim();
+      if (!id) throw new Error('Model ID wajib diisi');
+
+      const models = getModels();
+      if (models.some(m => m.id === id)) throw new Error('Model sudah ada');
+      models.push({ id, name });
+      setModels(models);
+      if (!getActiveModel()) setActiveModel(id);
+      renderModelsUI();
+    }
+
+    // ------------------------------
+    // UI: chat
+    // ------------------------------
+    function escapeHtml(s) {
+      return (s || '').replace(/[&<>"']/g, (c) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[c]));
+    }
+
+    function renderMessage(msg) {
+      const wrap = document.createElement('div');
+      const isUser = msg.role === 'user';
+      const isAssistant = msg.role === 'assistant';
+      const isSystem = msg.role === 'system';
+
+      wrap.className = `flex ${isUser ? 'justify-end' : 'justify-start'}`;
+
+      const bubble = document.createElement('div');
+      bubble.className = `max-w-[92%] md:max-w-[80%] rounded-2xl border px-3 py-2 text-sm leading-relaxed whitespace-pre-wrap ${
+        isUser
+          ? 'bg-indigo-600/15 border-indigo-500/30'
+          : isAssistant
+          ? 'bg-zinc-950/60 border-zinc-800'
+          : 'bg-amber-500/10 border-amber-500/25'
+      }`;
+
+      const header = document.createElement('div');
+      header.className = 'flex items-center justify-between gap-3 mb-1';
+
+      const role = document.createElement('div');
+      role.className = `text-[11px] uppercase tracking-wider ${
+        isUser ? 'text-indigo-200' : isAssistant ? 'text-zinc-400' : 'text-amber-300'
+      }`;
+      role.textContent = msg.role;
+
+      const actions = document.createElement('div');
+      actions.className = 'flex items-center gap-2';
+
+      const copyBtn = document.createElement('button');
+      copyBtn.className = 'text-[11px] px-2 py-0.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800';
+      copyBtn.textContent = 'Copy';
+      copyBtn.onclick = async () => {
+        await navigator.clipboard.writeText(msg.content || '');
+        toast('Tersalin');
+      };
+
+      actions.appendChild(copyBtn);
+      header.appendChild(role);
+      header.appendChild(actions);
+
+      const content = document.createElement('div');
+      // Basic formatting: keep as text (safe) and allow code-ish appearance with monospace blocks in backticks
+      // We'll do a simple inline transform for ``` blocks.
+      const raw = msg.content || '';
+      const parts = raw.split(/```/);
+      if (parts.length === 1) {
+        content.innerHTML = escapeHtml(raw);
+      } else {
+        // odd indexes are code
+        content.innerHTML = parts.map((p, i) => {
+          if (i % 2 === 1) {
+            return `<pre class="mt-2 mb-2 p-3 rounded-xl bg-zinc-950 border border-zinc-800 overflow-auto"><code class="mono text-xs">${escapeHtml(p.trim())}</code></pre>`;
+          }
+          return `<span>${escapeHtml(p)}</span>`;
+        }).join('');
+      }
+
+      bubble.appendChild(header);
+      bubble.appendChild(content);
+      wrap.appendChild(bubble);
+      return wrap;
+    }
+
+    function renderChat() {
+      chatScroll.innerHTML = '';
+      if (!messages.length) {
+        const empty = document.createElement('div');
+        empty.className = 'rounded-2xl border border-zinc-800 bg-zinc-950/40 p-4 text-sm text-zinc-300';
+        empty.innerHTML = `<div class="font-semibold">Mulai chat</div>
+          <div class="mt-1 text-zinc-400 text-sm">Masukkan pesan di bawah. Pastikan API key dan model sudah diatur.</div>`;
+        chatScroll.appendChild(empty);
+      }
+      for (const m of messages) chatScroll.appendChild(renderMessage(m));
+      chatScroll.scrollTop = chatScroll.scrollHeight;
+    }
+
+    function pushMessage(role, content) {
+      messages.push({ role, content });
+      saveChat();
+      renderChat();
+    }
+
+    function updateLastAssistantContent(content) {
+      for (let i = messages.length - 1; i >= 0; i--) {
+        if (messages[i].role === 'assistant') {
+          messages[i].content = content;
+          break;
+        }
+      }
+      saveChat();
+      renderChat();
+    }
+
+    // ------------------------------
+    // OpenRouter API
+    // ------------------------------
+    const OR_BASE = 'https://openrouter.ai/api/v1';
+
+    function buildHeaders() {
+      const key = getApiKey();
+      return {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${key}`,
+        // Recommended by OpenRouter docs
+        'HTTP-Referer': location.origin,
+        'X-Title': document.title
+      };
+    }
+
+    function buildPayload() {
+      const activeModel = ensureActiveModel();
+      const p = getParams();
+      const sys = getSystemPrompt().trim();
+
+      // Include system prompt as first message (if any)
+      const convo = [];
+      if (sys) convo.push({ role: 'system', content: sys });
+      convo.push(...messages.filter(m => m.role !== 'system'));
+
+      return {
+        model: activeModel,
+        messages: convo,
+        temperature: Number.isFinite(+p.temperature) ? +p.temperature : 0.7,
+        max_tokens: Number.isFinite(+p.max_tokens) ? +p.max_tokens : 1024
+      };
+    }
+
+    async function testConnection() {
+      smallError.textContent = '';
+      setStatus('working', 'Menguji...');
+      try {
+        const key = getApiKey();
+        if (!key) throw new Error('API key belum diisi');
+        const res = await fetch(`${OR_BASE}/models`, {
+          method: 'GET',
+          headers: buildHeaders()
+        });
+        if (!res.ok) {
+          const txt = await res.text();
+          throw new Error(`Gagal (${res.status}): ${txt.slice(0, 240)}`);
+        }
+        setStatus('ok', 'Terhubung');
+        toast('Koneksi OK');
+      } catch (e) {
+        setStatus('error', 'Error');
+        smallError.textContent = e.message || String(e);
+      } finally {
+        await sleep(900);
+        setStatus('idle', 'Siap');
+      }
+    }
+
+    async function browseModelsReload() {
+      el('browseError').textContent = '';
+      el('browseInfo').textContent = 'Memuat...';
+      el('browseTable').innerHTML = '';
+      try {
+        const key = getApiKey();
+        if (!key) throw new Error('API key belum diisi');
+        const res = await fetch(`${OR_BASE}/models`, {
+          method: 'GET',
+          headers: buildHeaders()
+        });
+        const json = await res.json().catch(() => null);
+        if (!res.ok) {
+          const msg = json?.error?.message || JSON.stringify(json) || (await res.text());
+          throw new Error(`Gagal (${res.status}): ${String(msg).slice(0, 300)}`);
+        }
+        browsingModels = (json?.data || []).map(m => ({
+          id: m.id,
+          name: m.name || '',
+          context_length: m.context_length || m.context || ''
+        }));
+        el('browseInfo').textContent = `Ditemukan ${browsingModels.length} model.`;
+        renderBrowseTable();
+      } catch (e) {
+        el('browseInfo').textContent = '';
+        el('browseError').textContent = e.message || String(e);
+      }
+    }
+
+    function renderBrowseTable() {
+      const q = (el('browseSearch').value || '').trim().toLowerCase();
+      const tbody = el('browseTable');
+      tbody.innerHTML = '';
+      const existing = new Set(getModels().map(m => m.id));
+
+      const list = browsingModels.filter(m => {
+        if (!q) return true;
+        return (m.id || '').toLowerCase().includes(q) || (m.name || '').toLowerCase().includes(q);
+      }).slice(0, 300);
+
+      for (const m of list) {
+        const tr = document.createElement('tr');
+        tr.className = 'align-top';
+
+        const tdId = document.createElement('td');
+        tdId.className = 'px-3 py-2 mono text-xs text-zinc-200';
+        tdId.textContent = m.id;
+
+        const tdName = document.createElement('td');
+        tdName.className = 'px-3 py-2 text-xs text-zinc-300';
+        tdName.textContent = m.name || '-';
+
+        const tdCtx = document.createElement('td');
+        tdCtx.className = 'px-3 py-2 text-xs text-zinc-400';
+        tdCtx.textContent = m.context_length ? String(m.context_length) : '-';
+
+        const tdAct = document.createElement('td');
+        tdAct.className = 'px-3 py-2 text-right';
+
+        const btn = document.createElement('button');
+        btn.className = 'text-xs px-2 py-1 rounded-lg border border-zinc-800 ' + (existing.has(m.id) ? 'bg-zinc-800/50 text-zinc-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-500');
+        btn.textContent = existing.has(m.id) ? 'Tersimpan' : 'Tambah';
+        btn.disabled = existing.has(m.id);
+        btn.onclick = () => {
+          try {
+            addModel({ id: m.id, name: m.name });
+            setActiveModel(m.id);
+            renderModelsUI();
+            toast('Model ditambahkan & diaktifkan');
+            renderBrowseTable();
+          } catch (e) {
+            toast(e.message || String(e));
+          }
+        };
+
+        tdAct.appendChild(btn);
+        tr.appendChild(tdId);
+        tr.appendChild(tdName);
+        tr.appendChild(tdCtx);
+        tr.appendChild(tdAct);
+        tbody.appendChild(tr);
+      }
+
+      if (!list.length) {
+        const tr = document.createElement('tr');
+        const td = document.createElement('td');
+        td.colSpan = 4;
+        td.className = 'px-3 py-6 text-center text-sm text-zinc-500';
+        td.textContent = 'Tidak ada hasil.';
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+      }
+    }
+
+    async function sendChat() {
+      smallError.textContent = '';
+
+      const key = getApiKey();
+      if (!key) {
+        showSetup(true);
+        return;
+      }
+      const activeModel = ensureActiveModel();
+      if (!activeModel) {
+        showSetup(true);
+        return;
+      }
+
+      const text = (userInput.value || '').trim();
+      if (!text) return;
+
+      userInput.value = '';
+      pushMessage('user', text);
+
+      // Create a placeholder assistant message
+      pushMessage('assistant', '');
+
+      const payload = buildPayload();
+
+      controller = new AbortController();
+      el('btnStop').classList.remove('hidden');
+      el('btnSend').disabled = true;
+      userInput.disabled = true;
+      setStatus('working', 'Mengirim...');
+
+      try {
+        const res = await fetch(`${OR_BASE}/chat/completions`, {
+          method: 'POST',
+          headers: buildHeaders(),
+          body: JSON.stringify(payload),
+          signal: controller.signal
+        });
+
+        const json = await res.json().catch(() => null);
+        if (!res.ok) {
+          const msg = json?.error?.message || JSON.stringify(json) || 'Unknown error';
+          throw new Error(`OpenRouter error (${res.status}): ${String(msg).slice(0, 400)}`);
+        }
+
+        const out = json?.choices?.[0]?.message?.content ?? '';
+        updateLastAssistantContent(out);
+        setStatus('ok', 'Selesai');
+        await sleep(650);
+      } catch (e) {
+        if (e.name === 'AbortError') {
+          updateLastAssistantContent('(dihentikan)');
+          toast('Dihentikan');
+        } else {
+          updateLastAssistantContent('');
+          smallError.textContent = e.message || String(e);
+          toast('Terjadi error');
+          setStatus('error', 'Error');
+        }
+      } finally {
+        controller = null;
+        el('btnStop').classList.add('hidden');
+        el('btnSend').disabled = false;
+        userInput.disabled = false;
+        userInput.focus();
+        setStatus('idle', 'Siap');
+      }
+    }
+
+    function stopChat() {
+      if (controller) controller.abort();
+    }
+
+    // ------------------------------
+    // Setup modal logic
+    // ------------------------------
+    function showSetup(force = false) {
+      // force = cannot close unless configured
+      setupModal.dataset.force = force ? '1' : '0';
+      setupModal.classList.remove('hidden');
+      // prefill
+      el('apiKeyInput').value = getApiKey();
+      el('firstModelId').value = '';
+      el('firstModelName').value = '';
+      el('setupError').textContent = '';
+    }
+
+    function hideSetup() {
+      if (setupModal.dataset.force === '1') {
+        // Only allow close if configured
+        const ok = Boolean(getApiKey()) && getModels().length > 0;
+        if (!ok) {
+          el('setupError').textContent = 'Wajib isi API key dan minimal 1 model.';
+          return;
+        }
+      }
+      setupModal.classList.add('hidden');
+    }
+
+    async function saveSetup() {
+      const err = el('setupError');
+      err.textContent = '';
+      const key = (el('apiKeyInput').value || '').trim();
+      const modelId = (el('firstModelId').value || '').trim();
+      const modelName = (el('firstModelName').value || '').trim();
+
+      try {
+        if (!key) throw new Error('API key wajib diisi');
+        setApiKey(key);
+
+        if (getModels().length === 0) {
+          if (!modelId) throw new Error('Tambahkan model pertama (Model ID)');
+          addModel({ id: modelId, name: modelName });
+          setActiveModel(modelId);
+        } else if (modelId) {
+          // If user provides, add as extra
+          try {
+            addModel({ id: modelId, name: modelName });
+          } catch {}
+        }
+
+        renderModelsUI();
+        // Persist system prompt input area if changed
+        setSystemPrompt(el('systemPrompt').value || '');
+
+        // Optional: quick validation by ping models (fast)
+        setStatus('working', 'Validasi key...');
+        const res = await fetch(`${OR_BASE}/models`, { method: 'GET', headers: buildHeaders() });
+        if (!res.ok) {
+          const txt = await res.text();
+          throw new Error(`Key/model belum valid (${res.status}). Detail: ${txt.slice(0, 200)}`);
+        }
+        setStatus('ok', 'Tersimpan');
+        toast('Pengaturan tersimpan');
+        hideSetup();
+      } catch (e) {
+        err.textContent = e.message || String(e);
+        setStatus('error', 'Error');
+      } finally {
+        await sleep(600);
+        setStatus('idle', 'Siap');
+      }
+    }
+
+    function resetAll() {
+      localStorage.removeItem(LS.apiKey);
+      localStorage.removeItem(LS.models);
+      localStorage.removeItem(LS.activeModel);
+      localStorage.removeItem(LS.systemPrompt);
+      localStorage.removeItem(LS.params);
+      localStorage.removeItem(LS.chat);
+      messages = [];
+      renderChat();
+      renderModelsUI();
+      toast('Data direset');
+      showSetup(true);
+    }
+
+    // ------------------------------
+    // Add model modal
+    // ------------------------------
+    function showAddModel() {
+      el('newModelId').value = '';
+      el('newModelName').value = '';
+      el('addModelError').textContent = '';
+      addModelModal.classList.remove('hidden');
+    }
+
+    function hideAddModel() {
+      addModelModal.classList.add('hidden');
+    }
+
+    function saveAddModel() {
+      const err = el('addModelError');
+      err.textContent = '';
+      try {
+        addModel({ id: el('newModelId').value, name: el('newModelName').value });
+        const id = el('newModelId').value.trim();
+        setActiveModel(id);
+        renderModelsUI();
+        toast('Model ditambahkan');
+        hideAddModel();
+      } catch (e) {
+        err.textContent = e.message || String(e);
+      }
+    }
+
+    // ------------------------------
+    // Browse modal
+    // ------------------------------
+    function showBrowse() {
+      browseModal.classList.remove('hidden');
+      el('browseSearch').value = '';
+      el('browseError').textContent = '';
+      el('browseInfo').textContent = '';
+      if (!browsingModels.length) browseModelsReload();
+      else renderBrowseTable();
+    }
+
+    function hideBrowse() {
+      browseModal.classList.add('hidden');
+    }
+
+    // ------------------------------
+    // Export
+    // ------------------------------
+    function exportChat() {
+      const data = {
+        exported_at: new Date().toISOString(),
+        model: ensureActiveModel(),
+        system_prompt: getSystemPrompt(),
+        params: getParams(),
+        messages
+      };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `openrouter-chat-${Date.now()}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast('Diexport');
+    }
+
+    // ------------------------------
+    // Events
+    // ------------------------------
+    el('btnSetup').onclick = () => showSetup(false);
+    el('btnCloseSetup').onclick = hideSetup;
+    el('btnSaveSetup').onclick = saveSetup;
+    el('btnReset').onclick = resetAll;
+
+    el('btnAddModel').onclick = showAddModel;
+    el('btnCloseAddModel').onclick = hideAddModel;
+    el('btnSaveModel').onclick = saveAddModel;
+
+    el('btnBrowseModels').onclick = showBrowse;
+    el('btnCloseBrowse').onclick = hideBrowse;
+    el('btnReloadModels').onclick = browseModelsReload;
+    el('browseSearch').addEventListener('input', () => renderBrowseTable());
+
+    el('btnSend').onclick = sendChat;
+    el('btnStop').onclick = stopChat;
+    el('btnClear').onclick = () => {
+      messages = [];
+      saveChat();
+      renderChat();
+      toast('Chat dibersihkan');
+    };
+    el('btnExport').onclick = exportChat;
+
+    modelSelect.addEventListener('change', () => {
+      const id = modelSelect.value;
+      setActiveModel(id);
+      renderModelsUI();
+      toast('Model aktif diubah');
+    });
+
+    // Enter to send (Shift+Enter for newline)
+    userInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendChat();
+      }
+    });
+
+    el('btnTest').onclick = testConnection;
+
+    // Settings fields persistence
+    el('systemPrompt').addEventListener('input', () => {
+      setSystemPrompt(el('systemPrompt').value);
+    });
+
+    el('temp').addEventListener('change', () => {
+      const p = getParams();
+      p.temperature = +el('temp').value;
+      setParams(p);
+    });
+
+    el('maxTokens').addEventListener('change', () => {
+      const p = getParams();
+      p.max_tokens = +el('maxTokens').value;
+      setParams(p);
+    });
+
+    // Click outside to close (unless forced)
+    setupModal.addEventListener('click', (e) => {
+      if (e.target === setupModal.firstElementChild) hideSetup();
+    });
+    addModelModal.addEventListener('click', (e) => {
+      if (e.target === addModelModal.firstElementChild) hideAddModel();
+    });
+    browseModal.addEventListener('click', (e) => {
+      if (e.target === browseModal.firstElementChild) hideBrowse();
+    });
+
+    // Reveal API key toggle
+    el('btnRevealKey').onclick = () => {
+      const inp = el('apiKeyInput');
+      inp.type = (inp.type === 'password') ? 'text' : 'password';
+      el('btnRevealKey').textContent = (inp.type === 'password') ? 'Tampilkan' : 'Sembunyikan';
+    };
+
+    // ------------------------------
+    // Boot
+    // ------------------------------
+    function boot() {
+      // Load saved
+      const p = getParams();
+      el('temp').value = p.temperature ?? 0.7;
+      el('maxTokens').value = p.max_tokens ?? 1024;
+      el('systemPrompt').value = getSystemPrompt();
+
+      loadChat();
+      renderChat();
+      renderModelsUI();
+
+      // Require initial setup: API key + at least one model
+      const needs = !getApiKey() || getModels().length === 0;
+      if (needs) showSetup(true);
+      else setStatus('idle', 'Siap');
+    }
+
+    boot();
+  </script>
+</body>
+</html>
